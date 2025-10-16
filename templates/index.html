@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aviator Prediction Dashboard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Arial", sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .status-bar {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .status-item {
+        display: flex;
+        align-items: center;
+        margin: 5px;
+      }
+
+      .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
+
+      .status-online {
+        background: #4caf50;
+      }
+      .status-offline {
+        background: #f44336;
+      }
+      .status-warning {
+        background: #ff9800;
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        padding: 20px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .card h3 {
+        margin-bottom: 15px;
+        color: #fff;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+        padding-bottom: 10px;
+      }
+
+      .prediction-card {
+        text-align: center;
+      }
+
+      .prediction-value {
+        font-size: 3em;
+        font-weight: bold;
+        color: #4caf50;
+        margin: 20px 0;
+      }
+
+      .confidence {
+        font-size: 1.2em;
+        color: #ffeb3b;
+      }
+
+      .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+
+      .btn {
+        background: linear-gradient(45deg, #4caf50, #45a049);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 25px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.3s ease;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      .btn-warning {
+        background: linear-gradient(45deg, #ff9800, #f57c00);
+      }
+
+      .btn-danger {
+        background: linear-gradient(45deg, #f44336, #d32f2f);
+      }
+
+      input[type="text"] {
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.9);
+        color: #333;
+        flex: 1;
+        min-width: 200px;
+      }
+
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+      }
+
+      .data-table th,
+      .data-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      .data-table th {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      .multiplier-high {
+        color: #4caf50;
+      }
+      .multiplier-medium {
+        color: #ff9800;
+      }
+      .multiplier-low {
+        color: #f44336;
+      }
+
+      .chart-container {
+        height: 300px;
+        margin-top: 15px;
+      }
+
+      .alert {
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 5px;
+      }
+
+      .alert-success {
+        background: rgba(76, 175, 80, 0.3);
+      }
+      .alert-warning {
+        background: rgba(255, 152, 0, 0.3);
+      }
+      .alert-danger {
+        background: rgba(244, 67, 54, 0.3);
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 768px) {
+        .dashboard-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .status-bar {
+          flex-direction: column;
+          text-align: center;
+        }
+
+        .controls {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🚀 Aviator Prediction System</h1>
+        <p>Real-time crash multiplier prediction dashboard</p>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-item">
+          <div class="status-dot status-offline" id="connectionStatus"></div>
+          <span>Connection: <span id="connectionText">Offline</span></span>
+        </div>
+        <div class="status-item">
+          <span>Last Update: <span id="lastUpdate">Never</span></span>
+        </div>
+        <div class="status-item">
+          <span>Total Rounds: <span id="totalRounds">0</span></span>
+        </div>
+        <div class="status-item">
+          <span>Accuracy: <span id="accuracy">N/A</span></span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <input
+          type="text"
+          id="siteUrl"
+          placeholder="Enter betting site URL (e.g., https://xyz.com)"
+          value="https://xyz.com"
+        />
+        <button class="btn" onclick="analyzeNetwork()">Analyze Network</button>
+        <button class="btn btn-warning" onclick="startCapture()">
+          Start Capture
+        </button>
+        <button class="btn btn-danger" onclick="stopCapture()">Stop</button>
+      </div>
+
+      <div id="alerts"></div>
+
+      <div class="dashboard-grid">
+        <div class="card prediction-card">
+          <h3>🎯 Next Prediction</h3>
+          <div class="prediction-value" id="predictionValue">?.??x</div>
+          <div class="confidence">
+            Confidence: <span id="confidenceValue">0%</span>
+          </div>
+          <div style="margin-top: 15px">
+            <small>Method: <span id="predictionMethod">-</span></small>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>📊 Statistics (24h)</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+            <div>Average: <strong id="avgMultiplier">0.00x</strong></div>
+            <div>Max: <strong id="maxMultiplier">0.00x</strong></div>
+            <div>Min: <strong id="minMultiplier">0.00x</strong></div>
+            <div>Rounds: <strong id="roundCount">0</strong></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔧 Network Analysis</h3>
+          <div id="networkResults">
+            <p>Click "Analyze Network" to discover endpoints</p>
+          </div>
+          <div style="margin-top: 15px">
+            <input
+              type="text"
+              id="manualEndpoint"
+              placeholder="Manual WebSocket/API URL"
+            />
+            <select id="endpointType" style="padding: 10px; margin-left: 10px">
+              <option value="websocket">WebSocket</option>
+              <option value="api">API</option>
+            </select>
+            <button
+              class="btn"
+              onclick="connectManual()"
+              style="margin-left: 10px"
+            >
+              Connect
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📈 Recent Game Data</h3>
+        <div style="overflow-x: auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Round ID</th>
+                <th>Multiplier</th>
+                <th>Time</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody id="recentData">
+              <tr>
+                <td colspan="4" style="text-align: center">
+                  No data available
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let updateInterval;
+      let isCapturing = false;
+
+      // Initialize dashboard
+      document.addEventListener("DOMContentLoaded", function () {
+        updateStatistics();
+        updateRecentData();
+
+        // Auto-refresh every 5 seconds
+        updateInterval = setInterval(() => {
+          if (isCapturing) {
+            updatePrediction();
+            updateRecentData();
+            updateStatistics();
+          }
+        }, 5000);
+      });
+
+      async function analyzeNetwork() {
+        const siteUrl = document.getElementById("siteUrl").value;
+        if (!siteUrl) {
+          showAlert("Please enter a site URL", "warning");
+          return;
+        }
+
+        showAlert("Analyzing network traffic...", "success");
+
+        try {
+          const response = await fetch("/api/network-analysis", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ site_url: siteUrl }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            const networkResults = document.getElementById("networkResults");
+            networkResults.innerHTML = `
+                        <div><strong>WebSocket URLs:</strong></div>
+                        <ul>${data.websocket_urls
+                          .map(
+                            (url) =>
+                              `<li style="font-size: 12px; word-break: break-all;">${url}</li>`
+                          )
+                          .join("")}</ul>
+                        <div><strong>API Endpoints:</strong></div>
+                        <ul>${data.api_endpoints
+                          .map(
+                            (url) =>
+                              `<li style="font-size: 12px; word-break: break-all;">${url}</li>`
+                          )
+                          .join("")}</ul>
+                    `;
+            showAlert("Network analysis completed", "success");
+          } else {
+            showAlert(`Analysis failed: ${data.error}`, "danger");
+          }
+        } catch (error) {
+          showAlert(`Network error: ${error.message}`, "danger");
+        }
+      }
+
+      async function startCapture() {
+        const siteUrl = document.getElementById("siteUrl").value;
+        if (!siteUrl) {
+          showAlert("Please enter a site URL", "warning");
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/start-capture", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ site_url: siteUrl }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            isCapturing = true;
+            updateConnectionStatus(true);
+            showAlert("Capture started successfully", "success");
+          } else {
+            showAlert(`Failed to start capture: ${data.error}`, "danger");
+          }
+        } catch (error) {
+          showAlert(`Error: ${error.message}`, "danger");
+        }
+      }
+
+      function stopCapture() {
+        isCapturing = false;
+        updateConnectionStatus(false);
+        showAlert("Capture stopped", "warning");
+      }
+
+      async function connectManual() {
+        const endpoint = document.getElementById("manualEndpoint").value;
+        const type = document.getElementById("endpointType").value;
+
+        if (!endpoint) {
+          showAlert("Please enter an endpoint URL", "warning");
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/manual-endpoint", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              endpoint_url: endpoint,
+              type: type,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            isCapturing = true;
+            updateConnectionStatus(true);
+            showAlert(data.message, "success");
+          } else {
+            showAlert(`Connection failed: ${data.error}`, "danger");
+          }
+        } catch (error) {
+          showAlert(`Error: ${error.message}`, "danger");
+        }
+      }
+
+      async function updatePrediction() {
+        try {
+          const response = await fetch("/api/prediction");
+          const data = await response.json();
+
+          if (data.success) {
+            document.getElementById(
+              "predictionValue"
+            ).textContent = `${data.prediction.multiplier}x`;
+            document.getElementById(
+              "confidenceValue"
+            ).textContent = `${Math.round(data.prediction.confidence * 100)}%`;
+            document.getElementById("predictionMethod").textContent =
+              data.prediction.method;
+            document.getElementById("lastUpdate").textContent =
+              new Date().toLocaleTimeString();
+          }
+        } catch (error) {
+          console.error("Error updating prediction:", error);
+        }
+      }
+
+      async function updateRecentData() {
+        try {
+          const response = await fetch("/api/recent-data?limit=10");
+          const data = await response.json();
+
+          if (data.success) {
+            const tbody = document.getElementById("recentData");
+
+            if (data.data.length === 0) {
+              tbody.innerHTML =
+                '<tr><td colspan="4" style="text-align: center;">No data available</td></tr>';
+              return;
+            }
+
+            tbody.innerHTML = data.data
+              .map((round) => {
+                const multiplierClass =
+                  round.crash_multiplier >= 5
+                    ? "multiplier-high"
+                    : round.crash_multiplier >= 2
+                    ? "multiplier-medium"
+                    : "multiplier-low";
+
+                return `
+                            <tr>
+                                <td>${round.round_id || "N/A"}</td>
+                                <td class="${multiplierClass}">${
+                  round.crash_multiplier
+                }x</td>
+                                <td>${new Date(
+                                  round.timestamp
+                                ).toLocaleTimeString()}</td>
+                                <td>${round.duration_seconds}s</td>
+                            </tr>
+                        `;
+              })
+              .join("");
+          }
+        } catch (error) {
+          console.error("Error updating recent data:", error);
+        }
+      }
+
+      async function updateStatistics() {
+        try {
+          const response = await fetch("/api/statistics");
+          const data = await response.json();
+
+          if (data.success) {
+            const stats = data.statistics;
+            document.getElementById("totalRounds").textContent =
+              stats.total_rounds;
+            document.getElementById("roundCount").textContent =
+              stats.total_rounds;
+            document.getElementById(
+              "avgMultiplier"
+            ).textContent = `${stats.avg_multiplier}x`;
+            document.getElementById(
+              "maxMultiplier"
+            ).textContent = `${stats.max_multiplier}x`;
+            document.getElementById(
+              "minMultiplier"
+            ).textContent = `${stats.min_multiplier}x`;
+            document.getElementById(
+              "accuracy"
+            ).textContent = `${stats.avg_accuracy}%`;
+          }
+        } catch (error) {
+          console.error("Error updating statistics:", error);
+        }
+      }
+
+      function updateConnectionStatus(online) {
+        const statusDot = document.getElementById("connectionStatus");
+        const statusText = document.getElementById("connectionText");
+
+        if (online) {
+          statusDot.className = "status-dot status-online";
+          statusText.textContent = "Online";
+        } else {
+          statusDot.className = "status-dot status-offline";
+          statusText.textContent = "Offline";
+        }
+      }
+
+      function showAlert(message, type) {
+        const alertsContainer = document.getElementById("alerts");
+        const alertDiv = document.createElement("div");
+        alertDiv.className = `alert alert-${type}`;
+        alertDiv.textContent = message;
+
+        alertsContainer.appendChild(alertDiv);
+
+        // Remove alert after 5 seconds
+        setTimeout(() => {
+          alertDiv.remove();
+        }, 5000);
+      }
+    </script>
+  </body>
+</html>
