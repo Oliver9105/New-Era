@@ -1,0 +1,47 @@
+nohup: ignoring input
+2025-10-17 06:15:24,664 - __main__ - INFO - Initializing Aviator Predictor System...
+2025-10-17 06:15:24,664 - backend.real_data_collector - INFO - Real Data Collector initialized
+2025-10-17 06:15:24,664 - backend.real_game_analyzer - INFO - Real Game Analyzer initialized
+2025-10-17 06:15:24,664 - backend.real_network_inspector - INFO - Real Network Inspector initialized
+2025-10-17 06:15:24,664 - backend.real_prediction_engine - INFO - Real Prediction Engine initialized
+2025-10-17 06:15:24,664 - __main__ - INFO - Started background data processing loop
+2025-10-17 06:15:24,664 - __main__ - INFO - Background data processing thread started
+2025-10-17 06:15:24,670 - __main__ - INFO - All systems initialized successfully!
+2025-10-17 06:15:24,672 - werkzeug - WARNING - Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+
+============================================================
+🚀 AVIATOR PREDICTOR - REAL DATA IMPLEMENTATION
+============================================================
+
+✅ This version connects to REAL betting sites!
+⏱️  You may see timeout errors - this is NORMAL when connecting to betting sites
+🔍 Monitor real-time status: python monitor_connections.py
+🔧 Troubleshoot timeouts: python troubleshoot_timeouts.py
+
+🌐 Starting server...
+
+
+📊 System Status:
+   • Real data collector: ✅ Active
+   • Prediction engine: ✅ Active
+   • Background processing: ✅ Running
+   • API endpoints: ✅ Available
+
+🎯 Ready to collect real data from betting sites!
+============================================================
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+2025-10-17 06:15:24,675 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.17.130.153:5000
+2025-10-17 06:15:24,676 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-10-17 06:15:32,017 - werkzeug - INFO - 127.0.0.1 - - [17/Oct/2025 06:15:32] "GET /api/recent-data HTTP/1.1" 200 -
+2025-10-17 06:15:41,280 - werkzeug - INFO - 127.0.0.1 - - [17/Oct/2025 06:15:41] "GET /api/status HTTP/1.1" 200 -
+2025-10-17 06:15:41,282 - backend.real_prediction_engine - WARNING - No data available, using default aviation-based prediction
+2025-10-17 06:15:41,358 - werkzeug - INFO - 127.0.0.1 - - [17/Oct/2025 06:15:41] "GET /api/connection-status HTTP/1.1" 200 -
+2025-10-17 06:15:41,360 - werkzeug - INFO - 127.0.0.1 - - [17/Oct/2025 06:15:41] "GET /api/live-rounds HTTP/1.1" 200 -
+2025-10-17 06:15:51,363 - backend.real_prediction_engine - WARNING - No data available, using default aviation-based prediction
+2025-10-17 06:15:51,370 - werkzeug - INFO - 127.0.0.1 - - [17/Oct/2025 06:15:51] "GET /api/connection-status HTTP/1.1" 200 -
+2025-10-17 06:15:51,372 - werkzeug - INFO - 127.0.0.1 - - [17/Oct/2025 06:15:51] "GET /api/live-rounds HTTP/1.1" 200 -

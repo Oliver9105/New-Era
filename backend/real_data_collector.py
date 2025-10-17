@@ -332,6 +332,12 @@ class RealDataCollector:
             
         elif 'chachisha' in domain:
             potential_apis.extend([
+                # Discovered aviator endpoints from chachisha.game
+                f"{base_domain}/games/crash/aviator",
+                f"{base_domain}/games/crash/aviamasters", 
+                f"{base_domain}/games/crash/aero",
+                f"{base_domain}/games/crash/high_flyer",
+                f"{base_domain}/games/originals/avionix",
                 f"{base_domain}/api/aviator/current-game",
                 f"{base_domain}/api/aviator/live-round",
                 f"{base_domain}/api/games/aviator/current",
@@ -339,6 +345,13 @@ class RealDataCollector:
                 f"{base_domain}/aviator/current",
                 f"{base_domain}/live/aviator",
                 f"{base_domain}/api/live/games/aviator"
+            ])
+            # Add WebSocket endpoints for chachisha.game (using walletsocksakata.gameyetu.com pattern)
+            potential_websockets.extend([
+                f"wss://walletsocksakata.gameyetu.com/socket.io/?EIO=4&transport=websocket&game=aviator",
+                f"wss://{parsed_url.netloc}/socket.io/?EIO=4&transport=websocket",
+                f"wss://{parsed_url.netloc}/ws/aviator/live",
+                f"wss://{parsed_url.netloc}/ws/games/aviator"
             ])
             
         elif '1xbet' in domain:
