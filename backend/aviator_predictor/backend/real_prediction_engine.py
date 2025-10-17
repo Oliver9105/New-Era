@@ -536,7 +536,7 @@ class RealPredictionEngine:
             recent_std = np.std(multipliers)
             confidence_adjustment = max(0.1, 1.0 - (recent_std / 10.0))
             final_confidence = base_confidence * confidence_adjustment
-            final_confidence = max(0.1, min(0.9, final_confidence))
+            final_confidence = max(0.1, min(1.0, final_confidence))
             
             return {
                 'multiplier': round(predicted_multiplier, 2),
@@ -599,8 +599,8 @@ class RealPredictionEngine:
                         # Confidence based on data consistency and amount
                         data_consistency = 1.0 - min(1.0, std_multiplier / avg_multiplier)
                         data_amount_factor = min(1.0, len(multipliers) / 20)  # More data = higher confidence
-                        confidence = (data_consistency * 0.7 + data_amount_factor * 0.3) * 0.8  # Cap at 0.8
-                        confidence = max(0.4, min(0.8, confidence))
+                        confidence = (data_consistency * 0.7 + data_amount_factor * 0.3) * 1.0  # Allow up to 100%
+                        confidence = max(0.4, min(1.0, confidence))
                         
                         return {
                             'multiplier': round(prediction, 2),
@@ -625,7 +625,7 @@ class RealPredictionEngine:
                 
                 # Confidence based on data consistency
                 confidence = max(0.2, 1.0 - (std_multiplier / avg_multiplier))
-                confidence = min(0.7, confidence)
+                confidence = min(1.0, confidence)
                 
                 return {
                     'multiplier': round(prediction, 2),
@@ -701,7 +701,7 @@ class RealPredictionEngine:
                     adjusted_prediction['confidence'] *= 1.1
             
             # Ensure confidence stays in bounds
-            adjusted_prediction['confidence'] = max(0.1, min(0.9, adjusted_prediction['confidence']))
+            adjusted_prediction['confidence'] = max(0.1, min(1.0, adjusted_prediction['confidence']))
             
             return adjusted_prediction
             

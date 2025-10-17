@@ -28,6 +28,7 @@ from backend.real_network_inspector import RealNetworkInspector
 from backend.real_data_collector import RealDataCollector
 from backend.real_prediction_engine import RealPredictionEngine
 from backend.real_game_analyzer import RealGameAnalyzer
+from backend.timing_synchronizer import TimingSynchronizer
 
 class MockGenericModule:
     def initialize(self): pass
@@ -38,6 +39,7 @@ network_inspector = RealNetworkInspector()
 web_collector = RealDataCollector()
 prediction_engine = RealPredictionEngine()
 game_analyzer = RealGameAnalyzer()
+timing_sync = TimingSynchronizer()
 
 # Link components for real data flow
 prediction_engine.set_data_collector(web_collector)
@@ -287,21 +289,88 @@ def get_script_library():
 # Feature 9: Data Modeling
 @app.route('/api/predict', methods=['POST'])
 def make_prediction():
-    """Generate prediction"""
+    """Generate prediction with timing synchronization"""
     data = request.get_json()
     model_type = data.get('model', 'ensemble')
+    
+    # Check timing synchronization
+    timing_context = timing_sync.get_prediction_context()
+    
+    if not timing_context.get('should_predict', True):
+        wait_time = timing_sync.wait_for_next_prediction_window()
+        return jsonify({
+            'status': 'waiting',
+            'message': timing_context.get('prediction_reason', 'Waiting for optimal prediction timing'),
+            'wait_time': wait_time,
+            'timing_info': timing_context
+        })
+    
+    # Make the actual prediction
     prediction = prediction_engine.predict(model_type)
     
-    # Store prediction
-    pred = Prediction(
-        predicted_multiplier=prediction['multiplier'],
-        confidence=prediction['confidence'],
-        model_used=model_type
-    )
-    db.session.add(pred)
-    db.session.commit()
+    # Add timing context to prediction
+    prediction.update({
+        'timing_synchronized': timing_context.get('timing_available', False),
+        'prediction_reason': timing_context.get('prediction_reason', 'Standard prediction'),
+        'round_context': timing_context.get('current_round_id', 'unknown')
+    })
+    
+    # Store prediction with proper Flask application context
+    try:
+        with app.app_context():
+            pred = Prediction(
+                predicted_multiplier=prediction['multiplier'],
+                confidence=prediction['confidence'],
+                model_used=model_type
+            )
+            db.session.add(pred)
+            db.session.commit()
+    except Exception as e:
+        logger.error(f"Error storing prediction: {e}")
     
     return jsonify(prediction)
+
+@app.route('/api/prediction')
+def get_prediction_compatible():
+    """Get current prediction (backwards compatibility route)"""
+    # For GET requests, use default ensemble model
+    model_type = request.args.get('model', 'ensemble')
+    
+    # Check timing synchronization
+    timing_context = timing_sync.get_prediction_context()
+    
+    if not timing_context.get('should_predict', True):
+        wait_time = timing_sync.wait_for_next_prediction_window()
+        return jsonify({
+            'status': 'waiting',
+            'message': timing_context.get('prediction_reason', 'Waiting for optimal prediction timing'),
+            'wait_time': wait_time,
+            'timing_info': timing_context
+        })
+    
+    # Make the actual prediction
+    prediction = prediction_engine.predict(model_type)
+    
+    # Add timing context to prediction
+    prediction.update({
+        'timing_synchronized': timing_context.get('timing_available', False),
+        'prediction_reason': timing_context.get('prediction_reason', 'Standard prediction'),
+        'round_context': timing_context.get('current_round_id', 'unknown')
+    })
+    
+    return jsonify(prediction)
+
+@app.route('/api/timing')
+def get_timing_info():
+    """Get current timing synchronization information"""
+    timing_context = timing_sync.get_prediction_context()
+    stats = timing_sync.get_stats()
+    
+    return jsonify({
+        'timing_context': timing_context,
+        'synchronization_stats': stats,
+        'should_predict_now': timing_context.get('should_predict', True)
+    })
 
 @app.route('/api/models/train', methods=['POST'])
 def train_models():
@@ -931,26 +1000,30 @@ def start_background_tasks():
         logger.info("Started background data processing loop")
         
         while True:
-            try:
-                # Check for new real-time data
-                realtime_data = web_collector.get_realtime_data()
-                
-                if realtime_data and realtime_data.get('game_data'):
-                    # Add to prediction engine for training
-                    prediction_engine.add_historical_data(realtime_data['game_data'])
+            # Wrap the entire loop in application context to prevent context issues
+            with app.app_context():
+                try:
+                    # Check for new real-time data
+                    realtime_data = web_collector.get_realtime_data()
                     
-                    # Add to game analyzer for statistics
-                    game_analyzer.add_game_data(realtime_data['game_data'])
-                    
-                    # Log when real data is processed
-                    game_data = realtime_data['game_data']
-                    if 'multiplier' in game_data:
-                        logger.info(f"🎯 PROCESSING REAL GAME DATA: {game_data['multiplier']}x from {realtime_data.get('source', 'unknown')}")
-                    
-                    # Store in database with proper Flask application context
-                    try:
+                    if realtime_data and realtime_data.get('game_data'):
+                        # Update timing synchronization with new round data
+                        timing_sync.update_round_info(realtime_data['game_data'])
+                        
+                        # Add to prediction engine for training
+                        prediction_engine.add_historical_data(realtime_data['game_data'])
+                        
+                        # Add to game analyzer for statistics
+                        game_analyzer.add_game_data(realtime_data['game_data'])
+                        
+                        # Log when real data is processed
+                        game_data = realtime_data['game_data']
                         if 'multiplier' in game_data:
-                            with app.app_context():
+                            logger.info(f"🎯 PROCESSING REAL GAME DATA: {game_data['multiplier']}x from {realtime_data.get('source', 'unknown')}")
+                        
+                        # Store in database - now within the app context
+                        try:
+                            if 'multiplier' in game_data:
                                 result = GameResult(
                                     multiplier=float(game_data['multiplier']),
                                     platform=web_collector.current_site or 'unknown',
@@ -963,19 +1036,24 @@ def start_background_tasks():
                                 
                                 # Notify prediction engine that new data is available
                                 prediction_engine.refresh_data()
-                    except Exception as e:
-                        logger.error(f"Error storing game result: {e}")
-                else:
-                    # Log when no real data is available (every 30 seconds to avoid spam)
-                    if int(time.time()) % 30 == 0:
-                        logger.debug("⏳ No new real-time data available - connections may still be establishing")
-                
-                # Sleep for a short interval
-                time.sleep(2)  # Check every 2 seconds
-                
-            except Exception as e:
-                logger.error(f"Error in data processing loop: {e}")
-                time.sleep(5)  # Longer sleep on error
+                        except Exception as e:
+                            logger.error(f"Error storing game result: {e}")
+                            db.session.rollback()  # Rollback failed transaction
+                    else:
+                        # Log when no real data is available (every 30 seconds to avoid spam)
+                        if int(time.time()) % 30 == 0:
+                            logger.debug("⏳ No new real-time data available - connections may still be establishing")
+                    
+                    # Sleep for a short interval
+                    time.sleep(2)  # Check every 2 seconds
+                    
+                except Exception as e:
+                    logger.error(f"Error in data processing loop: {e}")
+                    try:
+                        db.session.rollback()  # Ensure clean state after error
+                    except:
+                        pass
+                    time.sleep(5)  # Longer sleep on error
     
     # Start the background thread
     data_thread = threading.Thread(target=data_processing_loop, daemon=True)

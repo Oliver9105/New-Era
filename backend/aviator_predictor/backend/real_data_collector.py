@@ -510,20 +510,36 @@ class RealDataCollector:
                 return False
             def on_message(ws, message):
                 try:
+                    # Handle gzipped data that causes UTF-8 decode errors
+                    processed_message = message
+                    if isinstance(message, bytes):
+                        try:
+                            # Try to decompress if it's gzipped
+                            import gzip
+                            if message[:2] == b'\x1f\x8b':  # Gzip magic number
+                                processed_message = gzip.decompress(message).decode('utf-8')
+                                logger.debug(f"Successfully decompressed gzipped WebSocket message from {ws_url}")
+                            else:
+                                processed_message = message.decode('utf-8')
+                        except Exception as decode_error:
+                            logger.warning(f"Failed to decode WebSocket message from {ws_url}: {decode_error}")
+                            # Store as binary data for analysis
+                            processed_message = f"<binary_data_length_{len(message)}>"
+                    
                     # Parse message and add to queue
                     data = {
                         'source': 'websocket',
                         'url': ws_url,
                         'timestamp': datetime.now().isoformat(),
-                        'raw_message': message,
+                        'raw_message': processed_message,
                         'connection_id': connection_id
                     }
                     
                     # Try to parse JSON
                     try:
-                        parsed_message = json.loads(message)
+                        parsed_message = json.loads(processed_message)
                         data['parsed_message'] = parsed_message
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, TypeError):
                         data['parsed_message'] = None
                     
                     self.data_queue.put(data)
@@ -953,7 +969,7 @@ class RealDataCollector:
     def _start_mock_data_generator(self) -> bool:
         """
         Start mock data generator as fallback when real connections fail
-        Generates realistic aviator game data to feed the prediction engine
+        Generates realistic aviator game data with proper timing to feed the prediction engine
         """
         try:
             import random
@@ -1002,8 +1018,10 @@ class RealDataCollector:
                         logger.info(f"🎲 Generated mock round {round_counter}: {round_id} with multiplier {multiplier}x")
                         round_counter += 1
                         
-                        # Wait between rounds (realistic game timing: 30-120 seconds)
-                        time.sleep(random.randint(30, 120))
+                        # Realistic game timing: 20-60 seconds between rounds (typical aviator timing)
+                        # This is much more frequent than before to provide better prediction data
+                        wait_time = random.randint(20, 60)
+                        time.sleep(wait_time)
                         
                     except Exception as e:
                         logger.error(f"Error in mock data generation: {e}")
