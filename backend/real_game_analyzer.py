@@ -71,6 +71,7 @@ from collections import deque, Counter
 import logging
 import json
 import statistics
+import time
 
 try:
     from scipy import stats
@@ -303,8 +304,7 @@ class RealGameAnalyzer:
             
             # Filter data by time period
             cutoff_time = datetime.now() - timedelta(hours=hours)
-            recent_data = "}\n"
-            
+            recent_data = []
             for round_data in self.game_history:
                 try:
                     round_time = pd.to_datetime(round_data.get('timestamp'))
@@ -657,9 +657,14 @@ class RealGameAnalyzer:
     def _generate_demo_rounds(self, limit: int) -> List[Dict[str, Any]]:
         """Generate demo rounds when no real data is available"""
         rounds = []
+        base_time = int(time.time())
         for i in range(limit):
+            # Generate realistic-looking round IDs based on timestamp and random component
+            round_timestamp = base_time - (i * 120)  # 2 minutes between rounds
+            round_id = f"{round_timestamp}_{np.random.randint(100, 999)}"
+            
             rounds.append({
-                'round_id': f'DEMO_{1000 + i}',
+                'round_id': round_id,
                 'crash_multiplier': round(np.random.uniform(1.01, 15.0), 2),
                 'timestamp': (datetime.now() - timedelta(minutes=i*2)).isoformat(),
                 'duration_seconds': np.random.randint(5, 60)

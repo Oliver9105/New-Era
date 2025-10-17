@@ -110,6 +110,47 @@ class RealPredictionEngine:
         logger.info("Real Prediction Engine initialized")
         self._load_saved_models()
         
+        # Request initial historical data if data collector is available
+        if hasattr(self, '_data_collector') and self._data_collector:
+            self._request_initial_data()
+    
+    def set_data_collector(self, data_collector):
+        """Set the data collector reference"""
+        self._data_collector = data_collector
+    
+    def refresh_data(self):
+        """Called when new data is available - refresh internal state"""
+        try:
+            # This method is called when new data has been processed
+            # We can use this to trigger any data-dependent updates
+            logger.debug("Prediction engine notified of new data")
+        except Exception as e:
+            logger.error(f"Error refreshing prediction engine data: {e}")
+    
+    def _request_initial_data(self):
+        """Request initial historical data from the data collector"""
+        try:
+            logger.info("Requesting initial historical data from data collector...")
+            
+            # Get any existing collected data
+            existing_data = self._data_collector.get_collected_data(limit=50)
+            
+            if existing_data:
+                logger.info(f"Found {len(existing_data)} existing data points")
+                for data_point in existing_data:
+                    if data_point.get('game_data'):
+                        self.add_historical_data(data_point['game_data'])
+            else:
+                logger.info("No existing data found - will populate as new data arrives")
+                
+            # Check if we need to trigger data collection
+            if len(self.historical_data) < 10:
+                logger.info("Insufficient historical data - triggering sample data collection")
+                # This will be called when the app starts data collection
+                
+        except Exception as e:
+            logger.error(f"Error requesting initial data: {e}")
+        
     def add_historical_data(self, game_data: Dict[str, Any]):
         """
         Add historical game data for training
@@ -122,14 +163,17 @@ class RealPredictionEngine:
             standardized_data = self._standardize_game_data(game_data)
             if standardized_data:
                 self.historical_data.append(standardized_data)
-                logger.debug(f"Added historical data point: {standardized_data['round_id']}")
+                logger.info(f"✅ Added historical data point: {standardized_data['round_id']} - {standardized_data['multiplier']}x (Total: {len(self.historical_data)} points)")
                 
                 # Automatically retrain if we have enough new data
                 if len(self.historical_data) % 50 == 0:  # Retrain every 50 new data points
                     self._auto_retrain()
+            else:
+                logger.warning(f"❌ Failed to standardize game data: {game_data}")
                     
         except Exception as e:
             logger.error(f"Error adding historical data: {e}")
+            logger.error(f"Game data: {game_data}")
     
     def get_current_prediction(self) -> Dict[str, Any]:
         """
@@ -507,14 +551,73 @@ class RealPredictionEngine:
     
     def _heuristic_prediction(self) -> Dict[str, Any]:
         """
-        Simple heuristic prediction when no trained models are available
+        Smart heuristic prediction when no trained models are available
+        Uses real collected data if available, fallback to intelligent defaults
         """
         try:
+            # Try to get recent data from data collector
+            if hasattr(self, '_data_collector') and self._data_collector:
+                recent_data = self._data_collector.get_collected_data(limit=10)
+                if recent_data:
+                    # Extract multipliers from recent real data
+                    multipliers = []
+                    for data_point in recent_data:
+                        if data_point.get('game_data') and data_point['game_data'].get('multiplier'):
+                            try:
+                                mult = float(data_point['game_data']['multiplier'])
+                                if 1.0 <= mult <= 50.0:  # Reasonable range for aviator
+                                    multipliers.append(mult)
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    if multipliers:
+                        logger.info(f"Using {len(multipliers)} real data points for heuristic prediction")
+                        
+                        # Calculate statistics from real data
+                        avg_multiplier = np.mean(multipliers)
+                        std_multiplier = np.std(multipliers)
+                        min_multiplier = np.min(multipliers)
+                        max_multiplier = np.max(multipliers)
+                        
+                        # Smart prediction based on recent patterns
+                        recent_trend = np.mean(multipliers[-3:]) if len(multipliers) >= 3 else avg_multiplier
+                        
+                        # Predict slightly above recent trend with pattern awareness
+                        if recent_trend > avg_multiplier * 1.2:
+                            # Recent high trend, predict regression to mean
+                            prediction = avg_multiplier * np.random.uniform(0.9, 1.1)
+                        elif recent_trend < avg_multiplier * 0.8:
+                            # Recent low trend, predict potential recovery
+                            prediction = avg_multiplier * np.random.uniform(1.0, 1.3)
+                        else:
+                            # Normal range, predict around recent trend
+                            prediction = recent_trend * np.random.uniform(0.95, 1.05)
+                        
+                        # Ensure prediction is within reasonable bounds
+                        prediction = max(1.01, min(20.0, prediction))
+                        
+                        # Confidence based on data consistency and amount
+                        data_consistency = 1.0 - min(1.0, std_multiplier / avg_multiplier)
+                        data_amount_factor = min(1.0, len(multipliers) / 20)  # More data = higher confidence
+                        confidence = (data_consistency * 0.7 + data_amount_factor * 0.3) * 0.8  # Cap at 0.8
+                        confidence = max(0.4, min(0.8, confidence))
+                        
+                        return {
+                            'multiplier': round(prediction, 2),
+                            'confidence': round(confidence, 2),
+                            'method': 'real_data_heuristic',
+                            'data_points_used': len(multipliers),
+                            'recent_trend': round(recent_trend, 2),
+                            'historical_avg': round(avg_multiplier, 2)
+                        }
+            
+            # Use local historical data if available
             if len(self.historical_data) >= 5:
-                # Use recent data for simple prediction
                 recent_multipliers = [d['multiplier'] for d in self.historical_data[-5:]]
                 avg_multiplier = np.mean(recent_multipliers)
                 std_multiplier = np.std(recent_multipliers)
+                
+                logger.info(f"📊 Using {len(self.historical_data)} local historical data points for prediction")
                 
                 # Simple prediction: slightly above average with some randomness
                 prediction = avg_multiplier * (1.0 + np.random.uniform(-0.1, 0.1))
@@ -524,23 +627,45 @@ class RealPredictionEngine:
                 confidence = max(0.2, 1.0 - (std_multiplier / avg_multiplier))
                 confidence = min(0.7, confidence)
                 
+                return {
+                    'multiplier': round(prediction, 2),
+                    'confidence': round(confidence, 2),
+                    'method': 'historical_heuristic',
+                    'data_points_used': len(recent_multipliers)
+                }
             else:
-                # Default prediction when no data available
-                prediction = np.random.uniform(1.5, 4.0)
-                confidence = 0.3
-            
-            return {
-                'multiplier': round(prediction, 2),
-                'confidence': round(confidence, 2),
-                'method': 'heuristic'
-            }
+                # Default prediction when no data available - use aviation industry patterns
+                logger.warning(f"❌ No sufficient data available (have {len(self.historical_data)} points, need 5+), using default aviation-based prediction")
+                
+                # Aviator games typically have these patterns:
+                # - Most crashes between 1.5x and 3x
+                # - Occasional higher multipliers
+                # - Very rare extremely high multipliers
+                
+                rand_val = np.random.random()
+                if rand_val < 0.6:  # 60% chance: low-medium multiplier
+                    prediction = np.random.uniform(1.2, 3.0)
+                    confidence = 0.4
+                elif rand_val < 0.85:  # 25% chance: medium-high multiplier
+                    prediction = np.random.uniform(3.0, 6.0)
+                    confidence = 0.3
+                else:  # 15% chance: high multiplier
+                    prediction = np.random.uniform(6.0, 15.0)
+                    confidence = 0.2
+                
+                return {
+                    'multiplier': round(prediction, 2),
+                    'confidence': round(confidence, 2),
+                    'method': 'pattern_based_default'
+                }
             
         except Exception as e:
             logger.error(f"Error in heuristic prediction: {e}")
             return {
                 'multiplier': 2.0,
                 'confidence': 0.3,
-                'method': 'fallback'
+                'method': 'fallback',
+                'error': str(e)
             }
     
     def _get_best_model(self) -> Optional[str]:
@@ -584,6 +709,85 @@ class RealPredictionEngine:
             logger.error(f"Error adjusting prediction: {e}")
             return prediction
     
+    def predict(self, model_type: str = 'ensemble') -> Dict[str, Any]:
+        """
+        Main prediction method called by the API
+        
+        Args:
+            model_type: Type of model to use for prediction
+            
+        Returns:
+            Dictionary containing prediction details
+        """
+        try:
+            logger.info(f"Making prediction using model type: {model_type}")
+            
+            # Try to get real-time data first
+            if hasattr(self, '_data_collector') and self._data_collector:
+                realtime_data = self._data_collector.get_realtime_data()
+                if realtime_data:
+                    return self.predict_realtime(realtime_data)
+            
+            # Use trained models if available
+            if self.trained_models and model_type in self.trained_models:
+                return self._predict_with_model(model_type)
+            elif model_type == 'ensemble' and self.trained_models:
+                return self._ensemble_prediction()
+            else:
+                # Use current prediction method
+                return self.get_current_prediction()
+                
+        except Exception as e:
+            logger.error(f"Error in predict method: {e}")
+            return self._heuristic_prediction()
+    
+    def set_data_collector(self, data_collector):
+        """
+        Set the data collector for real-time data access
+        
+        Args:
+            data_collector: RealDataCollector instance
+        """
+        self._data_collector = data_collector
+        logger.info("Data collector linked to prediction engine")
+    
+    def _ensemble_prediction(self) -> Dict[str, Any]:
+        """
+        Make ensemble prediction using multiple models
+        """
+        try:
+            predictions = []
+            confidences = []
+            
+            for model_name in self.trained_models.keys():
+                pred = self._predict_with_model(model_name)
+                if pred:
+                    predictions.append(pred['multiplier'])
+                    confidences.append(pred['confidence'])
+            
+            if predictions:
+                # Weighted average based on confidence
+                total_confidence = sum(confidences)
+                if total_confidence > 0:
+                    weighted_prediction = sum(p * c for p, c in zip(predictions, confidences)) / total_confidence
+                    avg_confidence = sum(confidences) / len(confidences)
+                else:
+                    weighted_prediction = sum(predictions) / len(predictions)
+                    avg_confidence = 0.5
+                
+                return {
+                    'multiplier': round(weighted_prediction, 2),
+                    'confidence': round(avg_confidence, 2),
+                    'method': 'ensemble',
+                    'models_used': list(self.trained_models.keys())
+                }
+            else:
+                return self._heuristic_prediction()
+                
+        except Exception as e:
+            logger.error(f"Error in ensemble prediction: {e}")
+            return self._heuristic_prediction()
+
     def _auto_retrain(self):
         """
         Automatically retrain models when new data is available
